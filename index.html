@@ -328,7 +328,7 @@
       <p id="section-indicator"></p>
       <div id="section-text"></div>
       <p id="no-text-message">Enter your script in the panel to get started.</p>
-      <p id="manual-hint">Press <kbd>Space</kbd> or click Skip to advance</p>
+      <p id="manual-hint"><kbd>&#8592;</kbd> Back &nbsp;&bull;&nbsp; <kbd>Space</kbd> / <kbd>&#8594;</kbd> Next</p>
       <div id="progress-bar-container">
         <div id="progress-bar"></div>
       </div>
@@ -586,6 +586,20 @@
     }
   }
 
+  /** Steps back one section in manual mode. Works whether playing or paused. */
+  function goBackSection() {
+    if (currentIndex <= 0) return; // already at start
+    clearTimeout(timer);
+    currentIndex--;
+
+    if (isPlaying) {
+      scheduleAdvance();
+    } else {
+      renderSection(currentIndex);
+      updateButtonStates();
+    }
+  }
+
   /** Halts all playback and resets state to "stopped". */
   function stopPlayback() {
     clearTimeout(timer);
@@ -643,16 +657,21 @@
     if (isNaN(v) || v < 0) waitTimeInput.value = 0;
   });
 
-  // --- Spacebar: advance section in manual mode ---
+  // --- Spacebar / arrow keys: navigate sections in manual mode ---
 
   document.addEventListener('keydown', (e) => {
     // Ignore keypresses while the user is typing in an input or textarea
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    if (e.code === 'Space' && isManualMode() && (isPlaying || isPaused)) {
-      e.preventDefault(); // prevent page scroll
+    if (!isManualMode() || !(isPlaying || isPaused)) return;
+
+    if (e.code === 'Space' || e.code === 'ArrowRight') {
+      e.preventDefault();
       skipSection();
+    } else if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      goBackSection();
     }
   });
 
