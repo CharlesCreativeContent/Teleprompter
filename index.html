@@ -239,6 +239,25 @@
       line-height: 1.6;
     }
 
+    /* Manual-mode spacebar hint */
+    #manual-hint {
+      display: none; /* shown via JS when in manual mode */
+      font-size: 0.9rem;
+      color: #666;
+      letter-spacing: 0.04em;
+    }
+
+    #manual-hint kbd {
+      display: inline-block;
+      padding: 0.15em 0.5em;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #222;
+      color: #aaa;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.85em;
+    }
+
     /* ---- Progress bar ---- */
     #progress-bar-container {
       position: absolute;
@@ -288,7 +307,10 @@
 
     <div class="field-group">
       <label for="wait-time-input">Wait Time (seconds)</label>
-      <input type="number" id="wait-time-input" value="5" min="1" max="300" />
+      <input type="number" id="wait-time-input" value="5" min="0" max="300" />
+      <small style="color:#667; font-size:0.75rem; line-height:1.4;">
+        Set to <strong style="color:#a0a8b8;">0</strong> to advance manually with the spacebar
+      </small>
     </div>
 
     <!-- Playback controls -->
@@ -306,6 +328,7 @@
       <p id="section-indicator"></p>
       <div id="section-text"></div>
       <p id="no-text-message">Enter your script in the panel to get started.</p>
+      <p id="manual-hint">Press <kbd>Space</kbd> or click Skip to advance</p>
       <div id="progress-bar-container">
         <div id="progress-bar"></div>
       </div>
@@ -341,6 +364,7 @@
   const sectionIndicator = document.getElementById('section-indicator');
   const sectionText      = document.getElementById('section-text');
   const noTextMessage    = document.getElementById('no-text-message');
+  const manualHint       = document.getElementById('manual-hint');
   const progressBar      = document.getElementById('progress-bar');
 
   /* =========================================================
@@ -352,9 +376,14 @@
     return separatorInput.value || '/';
   }
 
-  /** Returns the wait time in milliseconds, clamped to a minimum of 1 second. */
+  /** Returns true when the user has set wait time to 0 (manual spacebar mode). */
+  function isManualMode() {
+    return Number(waitTimeInput.value) === 0;
+  }
+
+  /** Returns the wait time in milliseconds. 0 means manual-advance mode. */
   function getWaitMs() {
-    const secs = Math.max(1, Number(waitTimeInput.value) || 5);
+    const secs = Math.max(0, Number(waitTimeInput.value) || 0);
     return secs * 1000;
   }
 
@@ -448,6 +477,12 @@
 
     // Skip: enabled while playing or paused, and not already on the last section
     btnSkip.disabled   = !(isPlaying || isPaused) || !notAtEnd;
+
+    // Show the spacebar hint only in manual mode while an active session is running
+    manualHint.style.display =
+      isManualMode() && (isPlaying || isPaused) && hasSections && notAtEnd
+        ? ''
+        : 'none';
   }
 
   /**
@@ -477,6 +512,12 @@
     // If we just displayed the final section, stop automatically
     if (currentIndex >= sections.length - 1) {
       stopPlayback();
+      return;
+    }
+
+    // Manual mode (wait = 0): no timer — user presses Space or clicks Skip to advance
+    if (isManualMode()) {
+      resetProgressBar();
       return;
     }
 
@@ -595,11 +636,24 @@
     if (!isPlaying && !isPaused) refreshIdleDisplay();
   });
 
-  // --- Wait time: clamp to minimum 1 second ---
+  // --- Wait time: allow 0 (manual mode), clamp negatives to 0 ---
 
   waitTimeInput.addEventListener('change', () => {
     const v = Number(waitTimeInput.value);
-    if (isNaN(v) || v < 1) waitTimeInput.value = 1;
+    if (isNaN(v) || v < 0) waitTimeInput.value = 0;
+  });
+
+  // --- Spacebar: advance section in manual mode ---
+
+  document.addEventListener('keydown', (e) => {
+    // Ignore keypresses while the user is typing in an input or textarea
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    if (e.code === 'Space' && isManualMode() && (isPlaying || isPaused)) {
+      e.preventDefault(); // prevent page scroll
+      skipSection();
+    }
   });
 
   /* =========================================================
