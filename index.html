@@ -239,7 +239,7 @@
       line-height: 1.6;
     }
 
-    /* Manual-mode spacebar hint */
+    /* Manual-mode keyboard hint */
     #manual-hint {
       display: none; /* shown via JS when in manual mode */
       font-size: 0.9rem;
@@ -328,7 +328,7 @@
       <p id="section-indicator"></p>
       <div id="section-text"></div>
       <p id="no-text-message">Enter your script in the panel to get started.</p>
-      <p id="manual-hint">Press <kbd>Space</kbd> or click Skip to advance</p>
+      <p id="manual-hint"><kbd>&#8592;</kbd> Back &nbsp;&bull;&nbsp; <kbd>Space</kbd> / <kbd>&#8594;</kbd> Next</p>
       <div id="progress-bar-container">
         <div id="progress-bar"></div>
       </div>
@@ -478,9 +478,9 @@
     // Skip: enabled while playing or paused, and not already on the last section
     btnSkip.disabled   = !(isPlaying || isPaused) || !notAtEnd;
 
-    // Show the spacebar hint only in manual mode while an active session is running
+    // Show the keyboard hint only in manual mode while an active session is running
     manualHint.style.display =
-      isManualMode() && (isPlaying || isPaused) && hasSections && notAtEnd
+      isManualMode() && (isPlaying || isPaused) && hasSections
         ? ''
         : 'none';
   }
@@ -515,7 +515,7 @@
       return;
     }
 
-    // Manual mode (wait = 0): no timer — user presses Space or clicks Skip to advance
+    // Manual mode (wait = 0): no timer — user presses Space/→ or ← to navigate
     if (isManualMode()) {
       resetProgressBar();
       return;
@@ -568,7 +568,7 @@
   }
 
   /**
-   * Immediately jumps to the next section and resets the wait timer.
+   * Immediately jumps to the next section.
    * Works whether playing or paused.
    */
   function skipSection() {
@@ -577,10 +577,22 @@
     currentIndex++;
 
     if (isPlaying) {
-      // Continue playing from the next section with a fresh timer
       scheduleAdvance();
     } else {
-      // Paused: just show the new section, keep paused
+      renderSection(currentIndex);
+      updateButtonStates();
+    }
+  }
+
+  /** Steps back one section. Works whether playing or paused. */
+  function goBackSection() {
+    if (currentIndex <= 0) return; // already at start
+    clearTimeout(timer);
+    currentIndex--;
+
+    if (isPlaying) {
+      scheduleAdvance();
+    } else {
       renderSection(currentIndex);
       updateButtonStates();
     }
@@ -643,16 +655,21 @@
     if (isNaN(v) || v < 0) waitTimeInput.value = 0;
   });
 
-  // --- Spacebar: advance section in manual mode ---
+  // --- Arrow keys / spacebar: navigate sections in manual mode ---
 
   document.addEventListener('keydown', (e) => {
     // Ignore keypresses while the user is typing in an input or textarea
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    if (e.code === 'Space' && isManualMode() && (isPlaying || isPaused)) {
-      e.preventDefault(); // prevent page scroll
+    if (!isManualMode() || !(isPlaying || isPaused)) return;
+
+    if (e.code === 'Space' || e.code === 'ArrowRight') {
+      e.preventDefault();
       skipSection();
+    } else if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      goBackSection();
     }
   });
 
