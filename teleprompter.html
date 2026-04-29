@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teleprompter</title>
+  <style>
+    /* =========================================================
+       RESET & BASE
+    ========================================================= */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   Helvetica, Arial, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* =========================================================
+       APP SHELL — stacks vertically on mobile, side-by-side on wide screens
+    ========================================================= */
+    #app {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 100vh;
+    }
+
+    @media (min-width: 900px) {
+      #app {
+        flex-direction: row;
+      }
+    }
+
+    /* =========================================================
+       CONTROL PANEL
+    ========================================================= */
+    #panel {
+      background: #16213e;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      overflow-y: auto;
+    }
+
+    @media (min-width: 900px) {
+      #panel {
+        width: 340px;
+        min-width: 280px;
+        max-width: 380px;
+        border-right: 1px solid #0f3460;
+        min-height: 100vh;
+      }
+    }
+
+    #panel h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #e94560;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* ---- Field groups ---- */
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #a0a8b8;
+    }
+
+    input[type="text"],
+    textarea,
+    input[type="number"] {
+      background: #0f3460;
+      border: 1px solid #1a4a80;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 0.95rem;
+      padding: 0.55rem 0.75rem;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+
+    input[type="text"]:focus,
+    textarea:focus,
+    input[type="number"]:focus {
+      border-color: #e94560;
+    }
+
+    textarea {
+      min-height: 160px;
+      resize: vertical;
+      font-family: inherit;
+      line-height: 1.5;
+    }
+
+    /* ---- Range slider ---- */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: #e94560;
+      cursor: pointer;
+    }
+
+    .slider-readout {
+      font-size: 0.85rem;
+      color: #e94560;
+      font-weight: 700;
+      min-width: 3.5rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    /* ---- Buttons ---- */
+    #button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    button {
+      flex: 1 1 auto;
+      min-width: 80px;
+      min-height: 44px;
+      padding: 0.5rem 0.75rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s, transform 0.1s;
+      letter-spacing: 0.03em;
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    #btn-play   { background: #e94560; color: #fff; }
+    #btn-pause  { background: #f0a500; color: #111; }
+    #btn-replay { background: #0f3460; color: #e0e0e0; border: 1px solid #1a4a80; }
+    #btn-skip   { background: #0f3460; color: #e0e0e0; border: 1px solid #1a4a80; }
+
+    #btn-play:hover:not(:disabled)   { background: #c73652; }
+    #btn-pause:hover:not(:disabled)  { background: #d08e00; }
+    #btn-replay:hover:not(:disabled) { background: #1a4a80; }
+    #btn-skip:hover:not(:disabled)   { background: #1a4a80; }
+
+    /* =========================================================
+       TELEPROMPTER DISPLAY
+    ========================================================= */
+    #display {
+      flex: 1;
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      min-height: 50vh;
+    }
+
+    @media (min-width: 900px) {
+      #display {
+        min-height: 100vh;
+      }
+    }
+
+    #display-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      padding: 2rem;
+      gap: 1.5rem;
+      position: relative;
+    }
+
+    /* Section X of Y counter */
+    #section-indicator {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.85rem;
+      color: #555;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      min-height: 1.2em;
+    }
+
+    /* Main teleprompter text */
+    #section-text {
+      font-family: Georgia, "Times New Roman", Times, serif;
+      font-size: 48px; /* overridden by slider */
+      line-height: 1.55;
+      color: #f0f0f0;
+      text-align: center;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      max-width: 900px;
+      width: 100%;
+    }
+
+    /* Friendly empty-state message */
+    #no-text-message {
+      font-size: 1.1rem;
+      color: #444;
+      text-align: center;
+      font-style: italic;
+      max-width: 400px;
+      line-height: 1.6;
+    }
+
+    /* ---- Progress bar ---- */
+    #progress-bar-container {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 6px;
+      background: #222;
+    }
+
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #e94560;
+      /* transition is set dynamically via JS */
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===== CONTROL PANEL ===== -->
+  <div id="panel">
+    <h1>Teleprompter</h1>
+
+    <!-- Script inputs -->
+    <div class="field-group">
+      <label for="separator-input">Section Separator</label>
+      <input type="text" id="separator-input" value="/" placeholder="e.g. / or --- or [[next]]" />
+    </div>
+
+    <div class="field-group">
+      <label for="script-textarea">Script</label>
+      <textarea id="script-textarea"
+        placeholder="Paste your script here. Use the separator between sections.&#10;&#10;Example:&#10;Welcome to the show /&#10;Tonight we discuss the future /&#10;Thanks for watching"></textarea>
+    </div>
+
+    <!-- Display settings -->
+    <div class="field-group">
+      <label for="font-size-slider">Text Size</label>
+      <div class="slider-row">
+        <input type="range" id="font-size-slider" min="16" max="120" value="48" />
+        <span class="slider-readout"><span id="font-size-value">48</span>px</span>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label for="wait-time-input">Wait Time (seconds)</label>
+      <input type="number" id="wait-time-input" value="5" min="1" max="300" />
+    </div>
+
+    <!-- Playback controls -->
+    <div id="button-group">
+      <button id="btn-play">&#9654; Play</button>
+      <button id="btn-pause"  disabled>&#10074;&#10074; Pause</button>
+      <button id="btn-replay" disabled>&#8634; Replay</button>
+      <button id="btn-skip"   disabled>&#9654;&#9654; Skip</button>
+    </div>
+  </div>
+
+  <!-- ===== TELEPROMPTER DISPLAY ===== -->
+  <div id="display" aria-live="polite" aria-atomic="true">
+    <div id="display-inner">
+      <p id="section-indicator"></p>
+      <div id="section-text"></div>
+      <p id="no-text-message">Enter your script in the panel to get started.</p>
+      <div id="progress-bar-container">
+        <div id="progress-bar"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  /* =========================================================
+     STATE
+  ========================================================= */
+  let sections    = [];   // trimmed, non-empty strings parsed from textarea
+  let currentIndex = 0;   // 0-based index of the section currently displayed
+  let timer        = null; // setTimeout handle for auto-advance
+  let isPlaying    = false;
+  let isPaused     = false;
+
+  /* =========================================================
+     DOM REFERENCES
+  ========================================================= */
+  const separatorInput  = document.getElementById('separator-input');
+  const scriptTextarea  = document.getElementById('script-textarea');
+  const fontSizeSlider  = document.getElementById('font-size-slider');
+  const fontSizeValue   = document.getElementById('font-size-value');
+  const waitTimeInput   = document.getElementById('wait-time-input');
+
+  const btnPlay   = document.getElementById('btn-play');
+  const btnPause  = document.getElementById('btn-pause');
+  const btnReplay = document.getElementById('btn-replay');
+  const btnSkip   = document.getElementById('btn-skip');
+
+  const sectionIndicator = document.getElementById('section-indicator');
+  const sectionText      = document.getElementById('section-text');
+  const noTextMessage    = document.getElementById('no-text-message');
+  const progressBar      = document.getElementById('progress-bar');
+
+  /* =========================================================
+     UTILITIES
+  ========================================================= */
+
+  /** Returns the separator string, defaulting to "/" if blank. */
+  function getSeparator() {
+    return separatorInput.value || '/';
+  }
+
+  /** Returns the wait time in milliseconds, clamped to a minimum of 1 second. */
+  function getWaitMs() {
+    const secs = Math.max(1, Number(waitTimeInput.value) || 5);
+    return secs * 1000;
+  }
+
+  /**
+   * Splits the textarea content by the separator, trims each piece,
+   * and filters out empty strings. Returns the resulting array.
+   */
+  function parseSections() {
+    const raw = scriptTextarea.value;
+    const sep = getSeparator();
+    return raw
+      .split(sep)
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }
+
+  /* =========================================================
+     PROGRESS BAR
+  ========================================================= */
+
+  /** Animates the progress bar from 0% to 100% over `durationMs` milliseconds. */
+  function startProgressBar(durationMs) {
+    // Reset instantly (no transition)
+    progressBar.style.transition = 'none';
+    progressBar.style.width = '0%';
+
+    // On the next animation frame, begin the timed fill
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        progressBar.style.transition = `width ${durationMs}ms linear`;
+        progressBar.style.width = '100%';
+      });
+    });
+  }
+
+  /** Freezes the progress bar at its current rendered position. */
+  function freezeProgressBar() {
+    // Read the current visual width before removing the transition
+    const container = progressBar.parentElement;
+    const fraction  = progressBar.offsetWidth / container.offsetWidth;
+    progressBar.style.transition = 'none';
+    progressBar.style.width = (fraction * 100).toFixed(2) + '%';
+  }
+
+  /** Resets the progress bar to empty with no animation. */
+  function resetProgressBar() {
+    progressBar.style.transition = 'none';
+    progressBar.style.width = '0%';
+  }
+
+  /* =========================================================
+     RENDERING
+  ========================================================= */
+
+  /**
+   * Renders the section at `index` from the current `sections` array.
+   * If sections is empty, shows the empty-state message.
+   */
+  function renderSection(index) {
+    if (sections.length === 0) {
+      sectionIndicator.textContent = '';
+      sectionText.textContent      = '';
+      noTextMessage.style.display  = '';
+      return;
+    }
+
+    noTextMessage.style.display  = 'none';
+    sectionIndicator.textContent = `Section ${index + 1} of ${sections.length}`;
+    sectionText.textContent      = sections[index];
+    // Apply the current slider value immediately
+    sectionText.style.fontSize   = fontSizeSlider.value + 'px';
+  }
+
+  /**
+   * Centralised button enable/disable logic.
+   * Called after every state change.
+   */
+  function updateButtonStates() {
+    const hasSections  = sections.length > 0;
+    const notAtEnd     = currentIndex < sections.length - 1;
+    const hasStarted   = isPlaying || isPaused || currentIndex > 0;
+
+    // Play: enabled when not actively playing (covers initial, paused, and finished states)
+    btnPlay.disabled   = isPlaying && !isPaused;
+
+    // Pause: enabled only while actively playing
+    btnPause.disabled  = !isPlaying || isPaused;
+
+    // Replay: enabled once there is content and playback has been initiated
+    btnReplay.disabled = !hasSections || !hasStarted;
+
+    // Skip: enabled while playing or paused, and not already on the last section
+    btnSkip.disabled   = !(isPlaying || isPaused) || !notAtEnd;
+  }
+
+  /**
+   * Refreshes the parsed sections and re-renders the idle display.
+   * Only called when NOT in an active or paused session.
+   */
+  function refreshIdleDisplay() {
+    sections     = parseSections();
+    currentIndex = 0;
+    renderSection(0);
+    updateButtonStates();
+  }
+
+  /* =========================================================
+     PLAYBACK CORE
+  ========================================================= */
+
+  /**
+   * Schedules the display of the current section and, if not at the end,
+   * registers a timer to advance to the next section after the wait time.
+   */
+  function scheduleAdvance() {
+    clearTimeout(timer);
+    renderSection(currentIndex);
+    updateButtonStates();
+
+    // If we just displayed the final section, stop automatically
+    if (currentIndex >= sections.length - 1) {
+      stopPlayback();
+      return;
+    }
+
+    const waitMs = getWaitMs();
+    startProgressBar(waitMs);
+
+    timer = setTimeout(() => {
+      currentIndex++;
+      scheduleAdvance();
+    }, waitMs);
+  }
+
+  /** Begins playback from the current `currentIndex`. */
+  function startPlayback() {
+    if (sections.length === 0) return; // nothing to play
+    isPlaying = true;
+    isPaused  = false;
+    scheduleAdvance();
+  }
+
+  /** Pauses auto-advance while keeping the current section visible. */
+  function pausePlayback() {
+    clearTimeout(timer);
+    timer     = null;
+    isPlaying = false;
+    isPaused  = true;
+    freezeProgressBar();
+    updateButtonStates();
+  }
+
+  /**
+   * Resumes playback from the current section.
+   * The wait timer restarts from its full duration — intuitive and simple.
+   */
+  function resumePlayback() {
+    isPlaying = true;
+    isPaused  = false;
+    scheduleAdvance();
+  }
+
+  /** Restarts playback from the very first section. */
+  function replayPlayback() {
+    clearTimeout(timer);
+    currentIndex = 0;
+    isPlaying    = true;
+    isPaused     = false;
+    scheduleAdvance();
+  }
+
+  /**
+   * Immediately jumps to the next section and resets the wait timer.
+   * Works whether playing or paused.
+   */
+  function skipSection() {
+    if (currentIndex >= sections.length - 1) return; // already at end
+    clearTimeout(timer);
+    currentIndex++;
+
+    if (isPlaying) {
+      // Continue playing from the next section with a fresh timer
+      scheduleAdvance();
+    } else {
+      // Paused: just show the new section, keep paused
+      renderSection(currentIndex);
+      updateButtonStates();
+    }
+  }
+
+  /** Halts all playback and resets state to "stopped". */
+  function stopPlayback() {
+    clearTimeout(timer);
+    timer     = null;
+    isPlaying = false;
+    isPaused  = false;
+    resetProgressBar();
+    updateButtonStates();
+  }
+
+  /* =========================================================
+     EVENT LISTENERS
+  ========================================================= */
+
+  // --- Playback buttons ---
+
+  btnPlay.addEventListener('click', () => {
+    // Re-parse on each fresh Play so the latest textarea content is used
+    if (!isPaused) {
+      sections     = parseSections();
+      currentIndex = 0;
+    }
+    isPaused ? resumePlayback() : startPlayback();
+  });
+
+  btnPause.addEventListener('click',  pausePlayback);
+  btnReplay.addEventListener('click', () => {
+    sections = parseSections();
+    replayPlayback();
+  });
+  btnSkip.addEventListener('click',   skipSection);
+
+  // --- Text size slider ---
+
+  fontSizeSlider.addEventListener('input', () => {
+    const size = fontSizeSlider.value;
+    fontSizeValue.textContent      = size;
+    sectionText.style.fontSize     = size + 'px';
+  });
+
+  // --- Script / separator inputs (update idle display only) ---
+
+  scriptTextarea.addEventListener('input', () => {
+    if (!isPlaying && !isPaused) refreshIdleDisplay();
+  });
+
+  separatorInput.addEventListener('input', () => {
+    if (!isPlaying && !isPaused) refreshIdleDisplay();
+  });
+
+  // --- Wait time: clamp to minimum 1 second ---
+
+  waitTimeInput.addEventListener('change', () => {
+    const v = Number(waitTimeInput.value);
+    if (isNaN(v) || v < 1) waitTimeInput.value = 1;
+  });
+
+  /* =========================================================
+     INIT — show the empty-state message on load
+  ========================================================= */
+  refreshIdleDisplay();
+</script>
+</body>
+</html>
